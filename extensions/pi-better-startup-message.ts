@@ -164,6 +164,7 @@ function buildSummary(pi: ExtensionAPI, ctx: ExtensionContext): StartupSummary {
 
 function renderSection(lines: string[], width: number, title: string, items: string[], color: (s: string) => string, dim: (s: string) => string) {
 	if (items.length === 0) return;
+	if (lines.length > 0) lines.push("");
 	lines.push(truncateToWidth(color(`${title} (${items.length})`), width));
 	for (const item of items) {
 		lines.push(truncateToWidth(dim(`  • ${item}`), width));
@@ -172,8 +173,6 @@ function renderSection(lines: string[], width: number, title: string, items: str
 
 function renderSummary(summary: StartupSummary, theme: Theme, width: number): string[] {
 	const lines: string[] = [];
-	const title = `${theme.bold(theme.fg("accent", "π startup"))} ${theme.fg("dim", "quiet resources")}`;
-	lines.push(truncateToWidth(title, width));
 	renderSection(lines, width, "Skills", summary.skills, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
 	renderSection(lines, width, "Prompts", summary.prompts, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
 	renderSection(lines, width, "Extensions", summary.extensions, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
@@ -186,12 +185,13 @@ function renderSummary(summary: StartupSummary, theme: Theme, width: number): st
 
 function plainSection(lines: string[], title: string, items: string[]): void {
 	if (items.length === 0) return;
+	if (lines.length > 0) lines.push("");
 	lines.push(`${title} (${items.length})`);
 	for (const item of items) lines.push(`  • ${item}`);
 }
 
 function plainSummary(summary: StartupSummary): string {
-	const lines = ["π startup quiet resources"];
+	const lines: string[] = [];
 	plainSection(lines, "Skills", summary.skills);
 	plainSection(lines, "Prompts", summary.prompts);
 	plainSection(lines, "Extensions", summary.extensions);
@@ -229,7 +229,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerMessageRenderer<StartupSummary>(EXTENSION_KEY, (message, _options, theme) => ({
 		render(width: number): string[] {
 			if (isStartupSummary(message.details)) return renderSummary(message.details, theme, width);
-			const content = typeof message.content === "string" ? message.content : "π startup quiet resources";
+			const content = typeof message.content === "string" ? message.content : "";
 			return content.split("\n").map((line) => truncateToWidth(theme.fg("dim", line), width));
 		},
 		invalidate() {},
