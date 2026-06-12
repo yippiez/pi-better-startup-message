@@ -120,16 +120,19 @@ function discoverExtensionFiles(baseDir: string, configuredPath: string): string
 	if (!stat.isDirectory()) return [configuredPath];
 
 	const files: string[] = [];
-	for (const entry of readdirSync(absolute, { withFileTypes: true })) {
-		if (entry.isFile() && /\.tsx?$/.test(entry.name)) {
-			files.push(join(configuredPath, entry.name));
-		} else if (entry.isDirectory()) {
-			const indexTs = join(absolute, entry.name, "index.ts");
-			const indexTsx = join(absolute, entry.name, "index.tsx");
-			if (existsSync(indexTs)) files.push(join(configuredPath, entry.name, "index.ts"));
-			else if (existsSync(indexTsx)) files.push(join(configuredPath, entry.name, "index.tsx"));
+	const visit = (absoluteDir: string, relativeDir: string, depth: number): void => {
+		if (depth > 2) return;
+		for (const entry of readdirSync(absoluteDir, { withFileTypes: true })) {
+			const absoluteEntry = join(absoluteDir, entry.name);
+			const relativeEntry = join(relativeDir, entry.name);
+			if (entry.isFile() && /\.tsx?$/.test(entry.name)) {
+				files.push(relativeEntry);
+			} else if (entry.isDirectory() && !entry.name.startsWith(".")) {
+				visit(absoluteEntry, relativeEntry, depth + 1);
+			}
 		}
-	}
+	};
+	visit(absolute, configuredPath, 0);
 	return files.length > 0 ? files : [configuredPath];
 }
 
