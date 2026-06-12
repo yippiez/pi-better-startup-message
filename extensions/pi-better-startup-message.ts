@@ -252,7 +252,8 @@ function divider(theme: Theme, width: number, label?: string): string {
 
 function renderProjectStatus(lines: string[], status: ProjectStatus | undefined, theme: Theme, width: number): void {
 	if (!status) return;
-	lines.push(divider(theme, width, "project"));
+	if (lines.length > 0) lines.push("");
+	lines.push(divider(theme, width));
 	status.lines.forEach((line, index) => {
 		const text = `  ${line}`;
 		const rendered = index === 0
@@ -269,9 +270,9 @@ function renderProjectStatus(lines: string[], status: ProjectStatus | undefined,
 
 function renderSummary(summary: StartupSummary, theme: Theme, width: number): string[] {
 	const lines: string[] = [...renderTurtle(theme), ""];
-	renderProjectStatus(lines, summary.projectStatus, theme, width);
 	renderSection(lines, width, "Skills", summary.skills, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
 	renderSection(lines, width, "Prompts", summary.prompts, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
+	renderProjectStatus(lines, summary.projectStatus, theme, width);
 	renderSection(lines, width, "Extensions", summary.extensions, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
 	renderSection(lines, width, "Local extensions", summary.localExtensions, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
 	if (summary.skills.length + summary.prompts.length + summary.extensions.length + summary.localExtensions.length === 0) {
@@ -289,16 +290,17 @@ function plainSection(lines: string[], title: string, items: string[]): void {
 
 function plainProjectStatus(lines: string[], status: ProjectStatus | undefined): void {
 	if (!status) return;
-	lines.push("─ project ─");
+	if (lines.length > 0) lines.push("");
+	lines.push("───────────");
 	for (const line of status.lines) lines.push(`  ${line}`);
 	lines.push("───────────");
 }
 
 function plainSummary(summary: StartupSummary): string {
 	const lines: string[] = [];
-	plainProjectStatus(lines, summary.projectStatus);
 	plainSection(lines, "Skills", summary.skills);
 	plainSection(lines, "Prompts", summary.prompts);
+	plainProjectStatus(lines, summary.projectStatus);
 	plainSection(lines, "Extensions", summary.extensions);
 	plainSection(lines, "Local extensions", summary.localExtensions);
 	if (summary.skills.length + summary.prompts.length + summary.extensions.length + summary.localExtensions.length === 0) {
