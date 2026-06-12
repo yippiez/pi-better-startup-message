@@ -1,18 +1,26 @@
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 const EXTENSION_KEY = "pi-better-startup-message";
 
 type JsonObject = Record<string, any>;
+
+interface ProjectStatus {
+	vcs: "jj" | "git";
+	root: string;
+	lines: string[];
+}
 
 interface StartupSummary {
 	skills: string[];
 	extensions: string[];
 	prompts: string[];
 	localExtensions: string[];
+	projectStatus?: ProjectStatus;
 }
 
 function readJson(path: string): JsonObject {
@@ -145,6 +153,53 @@ function compactUnique(items: string[]): string[] {
 	return [...new Set(items.map((item) => item.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
+function stripAnsi(text: string): string {
+	return text.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "");
+}
+
+function run(cwd: string, command: string, args: string[]): string | undefined {
+	try {
+		return stripAnsi(execFileSync(command, args, {
+			cwd,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+			timeout: 1500,
+			env: { ...process.env, NO_COLOR: "1", TERM: "dumb" },
+		}).trim());
+	} catch {
+		return undefined;
+	}
+}
+
+function shortRoot(root: string): string {
+	return basename(root) || root;
+}
+
+function detectJjStatus(cwd: string): ProjectStatus | undefined {
+	const root = run(cwd, "jj", ["root"]);
+	if (!root) return undefined;
+	const log = run(cwd, "jj", ["log", "--no-pager", "-n", "4", "--color", "never"]);
+	const lines = [`jj ${shortRoot(root)}`, ...(log ? log.split("\n").filter(Boolean).slice(0, 9) : ["(no jj log output)"])];
+	return { vcs: "jj", root, lines };
+}
+
+function detectGitStatus(cwd: string): ProjectStatus | undefined {
+	const root = run(cwd, "git", ["rev-parse", "--show-toplevel"]);
+	if (!root) return undefined;
+	const branch = run(cwd, "git", ["branch", "--show-current"]) || run(cwd, "git", ["rev-parse", "--short", "HEAD"]) || "unknown";
+	const status = (run(cwd, "git", ["status", "--short"]) || "").split("\n").filter(Boolean);
+	const changes = status.length === 0 ? "clean" : `${status.length} changed`;
+	const commits = (run(cwd, "git", ["log", "--oneline", "--decorate", "-n", "4"]) || "").split("\n").filter(Boolean);
+	const visibleStatus = status.slice(0, 3).map((line) => `± ${line}`);
+	if (status.length > visibleStatus.length) visibleStatus.push(`± … ${status.length - visibleStatus.length} more changes`);
+	const lines = [`git ${branch} · ${changes}`, ...visibleStatus, ...commits.map((line) => `● ${line}`)];
+	return { vcs: "git", root, lines };
+}
+
+function detectProjectStatus(ctx: ExtensionContext): ProjectStatus | undefined {
+	return detectJjStatus(ctx.cwd) ?? detectGitStatus(ctx.cwd);
+}
+
 function buildSummary(pi: ExtensionAPI, ctx: ExtensionContext): StartupSummary {
 	const settings = loadEffectiveSettings(ctx);
 	const packages = Array.isArray(settings.packages) ? settings.packages : [];
@@ -159,6 +214,7 @@ function buildSummary(pi: ExtensionAPI, ctx: ExtensionContext): StartupSummary {
 			return source ? packageExtensions(source) : [];
 		})),
 		localExtensions: compactUnique(localExtensions),
+		projectStatus: detectProjectStatus(ctx),
 	};
 }
 
@@ -182,8 +238,35 @@ function renderTurtle(theme: Theme): string[] {
 	];
 }
 
+function divider(theme: Theme, width: number, label?: string): string {
+	const cappedWidth = Math.max(12, Math.min(width, 96));
+	if (!label) return theme.fg("dim", "─".repeat(cappedWidth));
+	const title = ` ${label} `;
+	const left = 1;
+	const right = Math.max(1, cappedWidth - left - title.length);
+	return theme.fg("dim", "─".repeat(left) + title + "─".repeat(right));
+}
+
+function renderProjectStatus(lines: string[], status: ProjectStatus | undefined, theme: Theme, width: number): void {
+	if (!status) return;
+	lines.push(divider(theme, width, "project"));
+	status.lines.forEach((line, index) => {
+		const text = `  ${line}`;
+		const rendered = index === 0
+			? theme.fg("mdHeading", text)
+			: line.startsWith("±")
+				? theme.fg("warning", text)
+				: line.startsWith("@")
+					? theme.fg("accent", text)
+					: theme.fg("dim", text);
+		lines.push(truncateToWidth(rendered, width));
+	});
+	lines.push(divider(theme, width));
+}
+
 function renderSummary(summary: StartupSummary, theme: Theme, width: number): string[] {
 	const lines: string[] = [...renderTurtle(theme), ""];
+	renderProjectStatus(lines, summary.projectStatus, theme, width);
 	renderSection(lines, width, "Skills", summary.skills, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
 	renderSection(lines, width, "Prompts", summary.prompts, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
 	renderSection(lines, width, "Extensions", summary.extensions, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
@@ -201,8 +284,16 @@ function plainSection(lines: string[], title: string, items: string[]): void {
 	for (const item of items) lines.push(`  • ${item}`);
 }
 
+function plainProjectStatus(lines: string[], status: ProjectStatus | undefined): void {
+	if (!status) return;
+	lines.push("─ project ─");
+	for (const line of status.lines) lines.push(`  ${line}`);
+	lines.push("───────────");
+}
+
 function plainSummary(summary: StartupSummary): string {
 	const lines: string[] = [];
+	plainProjectStatus(lines, summary.projectStatus);
 	plainSection(lines, "Skills", summary.skills);
 	plainSection(lines, "Prompts", summary.prompts);
 	plainSection(lines, "Extensions", summary.extensions);
