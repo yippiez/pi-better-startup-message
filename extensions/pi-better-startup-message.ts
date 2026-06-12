@@ -130,9 +130,11 @@ function packageExtensions(source: string): string[] {
 	if (label.includes("pi-better-startup-message")) return [];
 	const dir = packageDir(source);
 	if (!dir) return [label];
-	const pkg = readJson(join(dir, "package.json"));
+	const packageJsonPath = join(dir, "package.json");
+	if (!existsSync(packageJsonPath)) return [label];
+	const pkg = readJson(packageJsonPath);
 	const configured = Array.isArray(pkg.pi?.extensions) ? pkg.pi.extensions : [];
-	if (configured.length === 0) return [label];
+	if (configured.length === 0) return [];
 	return configured.flatMap((entry: unknown) => {
 		if (typeof entry !== "string") return [];
 		return discoverExtensionFiles(dir, entry).map((file) => `${label}:${extensionDisplayPath(file)}`);
