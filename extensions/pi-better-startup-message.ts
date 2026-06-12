@@ -171,8 +171,19 @@ function renderSection(lines: string[], width: number, title: string, items: str
 	}
 }
 
+function renderTurtle(theme: Theme): string[] {
+	const y = (s: string) => theme.fg("warning", s);
+	const g = (s: string) => theme.fg("success", s);
+	const h = (s: string) => theme.fg("accent", s);
+	return [
+		" " + y("▗") + g("███") + y("▖"),
+		y("▐") + g("█████") + y("▌"),
+		" " + h("▝▀▘") + g("▀") + h("▝▀▘"),
+	];
+}
+
 function renderSummary(summary: StartupSummary, theme: Theme, width: number): string[] {
-	const lines: string[] = [];
+	const lines: string[] = [...renderTurtle(theme), ""];
 	renderSection(lines, width, "Skills", summary.skills, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
 	renderSection(lines, width, "Prompts", summary.prompts, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
 	renderSection(lines, width, "Extensions", summary.extensions, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
