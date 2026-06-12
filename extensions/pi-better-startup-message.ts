@@ -138,7 +138,6 @@ function discoverExtensionFiles(baseDir: string, configuredPath: string): string
 
 function packageExtensions(source: string): string[] {
 	const label = packageLabel(source);
-	if (label.includes("pi-better-startup-message")) return [];
 	const dir = packageDir(source);
 	if (!dir) return [label];
 	const packageJsonPath = join(dir, "package.json");
