@@ -176,9 +176,9 @@ function renderTurtle(theme: Theme): string[] {
 	const g = (s: string) => theme.fg("success", s);
 	const h = (s: string) => theme.fg("accent", s);
 	return [
-		" " + y("▗") + g("███") + y("▖"),
-		y("▐") + g("█████") + y("▌"),
-		" " + h("▝▀▘") + g("▀") + h("▝▀▘"),
+		" " + y("▗") + g("█████") + y("▖"),
+		y("▐") + g("███████") + y("▌"),
+		h("▝▀▘") + " " + h("▀") + " " + h("▝▀▘"),
 	];
 }
 
