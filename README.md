@@ -1,12 +1,12 @@
 # pi-better-startup-message
 
-A small Pi extension that replaces the long, line-wrapping startup resource block with a compact, one-item-per-line header when `quietStartup` is enabled.
+A small Pi extension that replaces the long, line-wrapping startup resource block with a compact, one-item-per-line chat history message when `quietStartup` is enabled.
 
 ## Behavior
 
-- If `quietStartup` is `true`, show a clean startup summary.
+- If `quietStartup` is `true`, append a clean startup summary to chat history.
 - If `quietStartup` is missing/false, do nothing so Pi's built-in startup listing is not duplicated.
-- Lines are truncated to the terminal width instead of wrapping messily.
+- Lines are rendered one item per line and truncated to the terminal width instead of wrapping messily.
 
 ## Settings
 
@@ -21,5 +21,4 @@ A small Pi extension that replaces the long, line-wrapping startup resource bloc
 
 ## Commands
 
-- `/better-startup` — show/re-render the header for preview.
-- `/better-startup:clear` — clear the custom header.
+- `/better-startup` — append the clean startup summary to chat history for preview.

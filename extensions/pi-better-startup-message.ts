@@ -1,8 +1,8 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 const EXTENSION_KEY = "pi-better-startup-message";
 
@@ -164,52 +164,85 @@ function buildSummary(pi: ExtensionAPI, ctx: ExtensionContext): StartupSummary {
 
 function renderSection(lines: string[], width: number, title: string, items: string[], color: (s: string) => string, dim: (s: string) => string) {
 	if (items.length === 0) return;
-	lines.push(truncateToWidth(color(`  ${title} (${items.length})`), width));
+	lines.push(truncateToWidth(color(`${title} (${items.length})`), width));
 	for (const item of items) {
-		lines.push(truncateToWidth(dim(`    • ${item}`), width));
+		lines.push(truncateToWidth(dim(`  • ${item}`), width));
 	}
 }
 
-function installHeader(pi: ExtensionAPI, ctx: ExtensionContext, force = false): void {
-	if (ctx.mode !== "tui") return;
+function renderSummary(summary: StartupSummary, theme: Theme, width: number): string[] {
+	const lines: string[] = [];
+	const title = `${theme.bold(theme.fg("accent", "π startup"))} ${theme.fg("dim", "quiet resources")}`;
+	lines.push(truncateToWidth(title, width));
+	renderSection(lines, width, "Skills", summary.skills, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
+	renderSection(lines, width, "Prompts", summary.prompts, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
+	renderSection(lines, width, "Extensions", summary.extensions, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
+	renderSection(lines, width, "Local extensions", summary.localExtensions, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
+	if (summary.skills.length + summary.prompts.length + summary.extensions.length + summary.localExtensions.length === 0) {
+		lines.push(truncateToWidth(theme.fg("dim", "  No startup resources found."), width));
+	}
+	return lines;
+}
+
+function plainSection(lines: string[], title: string, items: string[]): void {
+	if (items.length === 0) return;
+	lines.push(`${title} (${items.length})`);
+	for (const item of items) lines.push(`  • ${item}`);
+}
+
+function plainSummary(summary: StartupSummary): string {
+	const lines = ["π startup quiet resources"];
+	plainSection(lines, "Skills", summary.skills);
+	plainSection(lines, "Prompts", summary.prompts);
+	plainSection(lines, "Extensions", summary.extensions);
+	plainSection(lines, "Local extensions", summary.localExtensions);
+	if (summary.skills.length + summary.prompts.length + summary.extensions.length + summary.localExtensions.length === 0) {
+		lines.push("  No startup resources found.");
+	}
+	return lines.join("\n");
+}
+
+function isStartupSummary(value: unknown): value is StartupSummary {
+	return Boolean(
+		value &&
+		typeof value === "object" &&
+		Array.isArray((value as StartupSummary).skills) &&
+		Array.isArray((value as StartupSummary).extensions) &&
+		Array.isArray((value as StartupSummary).prompts) &&
+		Array.isArray((value as StartupSummary).localExtensions),
+	);
+}
+
+function sendStartupMessage(pi: ExtensionAPI, ctx: ExtensionContext, force = false): void {
 	if (!force && !isQuietStartupEnabled(ctx)) return;
 
 	const summary = buildSummary(pi, ctx);
-	ctx.ui.setHeader((_tui, theme) => ({
-		render(width: number): string[] {
-			const lines: string[] = [""];
-			const title = `${theme.bold(theme.fg("accent", "π startup"))} ${theme.fg("dim", "quiet resources")}`;
-			lines.push(truncateToWidth(`  ${title}`, width));
-			renderSection(lines, width, "Skills", summary.skills, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
-			renderSection(lines, width, "Prompts", summary.prompts, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
-			renderSection(lines, width, "Extensions", summary.extensions, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
-			renderSection(lines, width, "Local extensions", summary.localExtensions, (s) => theme.fg("mdHeading", s), (s) => theme.fg("dim", s));
-			if (summary.skills.length + summary.prompts.length + summary.extensions.length + summary.localExtensions.length === 0) {
-				lines.push(truncateToWidth(theme.fg("dim", "    No startup resources found."), width));
-			}
-			lines.push("");
-			return lines;
-		},
-		invalidate() {},
-	}));
+	pi.sendMessage<StartupSummary>({
+		customType: EXTENSION_KEY,
+		content: plainSummary(summary),
+		display: true,
+		details: summary,
+	});
 }
 
 export default function (pi: ExtensionAPI) {
-	pi.on("session_start", (_event, ctx) => {
-		installHeader(pi, ctx);
+	pi.registerMessageRenderer<StartupSummary>(EXTENSION_KEY, (message, _options, theme) => ({
+		render(width: number): string[] {
+			if (isStartupSummary(message.details)) return renderSummary(message.details, theme, width);
+			const content = typeof message.content === "string" ? message.content : "π startup quiet resources";
+			return content.split("\n").map((line) => truncateToWidth(theme.fg("dim", line), width));
+		},
+		invalidate() {},
+	}));
+
+	pi.on("session_start", (event, ctx) => {
+		if (event.reason === "startup") sendStartupMessage(pi, ctx);
 	});
 
 	pi.registerCommand("better-startup", {
-		description: "Preview the cleaner startup resource header",
+		description: "Append the cleaner startup resource summary to chat history",
 		handler: async (_args, ctx) => {
-			installHeader(pi, ctx, true);
-		},
-	});
-
-	pi.registerCommand("better-startup:clear", {
-		description: "Clear the cleaner startup resource header",
-		handler: async (_args, ctx) => {
-			ctx.ui.setHeader(undefined);
+			sendStartupMessage(pi, ctx, true);
 		},
 	});
 }
