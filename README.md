@@ -1,3 +1,14 @@
+# Moved to pchain
+
+This repository has moved into the pchain monorepo:
+
+- https://github.com/yippiez/pchain
+- Pi implementation: `pchain/pi/`
+
+This repo is kept only for history and compatibility.
+
+---
+
 # pi-better-startup-message
 
 A small Pi extension that replaces the long, line-wrapping startup resource block with a compact, one-item-per-line chat history message when `quietStartup` is enabled.
